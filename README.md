@@ -1,5 +1,6 @@
 # Multilateral-Moneyball
 Capstone Project for the Global Affairs major; visualization of UNGA voting records 1988-2014
+
 Created with Feras Alajmi and Ben Johnson 
 
 Use the R_corrplot_and_json_20141107.R script to generate JSON data
