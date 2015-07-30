@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html class="ocks-org do-not-copy">
+<meta charset="utf-8">
+<title>UN Voting Co-occurrence</title>
+
+<link rel="stylesheet" href="jQRangeSlider/css/iThing.css" type="text/css" />
+<link rel="stylesheet" href="style.css" type="text/css" />
+
+<style>
+
+.background {
+	fill: #eee;
+}
+
+line {
+	stroke: #fff;
+}
+
+text.active {
+	fill: red;
+}
+
+</style>
+
+<script src="jquery.min.js"></script>
+<script src="jquery_ui/jquery-ui.min.js"></script>
+<script src="http://d3js.org/d3.v2.min.js?2.8.1"></script>
+<script src="http://underscorejs.org/underscore-min.js"></script>
+<script src="jQRangeSlider/jQDateRangeSlider-min.js"></script>
+
+
+<header>
+	<a href="../" rel="author"> Adapted from Mike Bostock</a>
+</header>
+
+<h1>UN Co-occurrence Test</h1>
+
+<aside>
+	<p>Order: <select id="order">
+		<option value="index">by Index</option>
+		<option value="name">by Name</option>
+		<option value="group">by Cluster</option>
+	</select>
+
+	<!-- <p>Bloc: <select id="bloc">
+		<option value="LatAmer"> Latin America </option>
+		<option value="All"> All </option>
+		<option value="G77"> Group of 77 </option>
+	</select> -->
+	
+	<p>Bloc: <select id="bloc">
+		<option value="Arab">by Arab States</option>
+		<option value="G77"> Group of 77 </option>
+		
+		<option value="All"> All </option>
+		<option value="LatAmer"> Latin America </option>
+		<option value="ASEAN">by ASEAN</option>
+		<option value="BRICS">by BRICS</option>
+		<option value="EU">by European Union</option>
+		<option value="FmrUSSR">by Former USSR</option>
+		<option value="Islamic">by Islamic States</option>
+		<option value="NonAligned">by Nonaligned</option>
+		<option value="Western">by Western States</option>
+	</select>
+	
+	<div id="hover"></div>
+</aside>
+
+
+<script>
+
+var margin = {top: 200, right: 0, bottom: 10, left: 200},
+width = 720,
+height = 720;
+
+// Precompute the orders.
+function make_plot(undata) {
+	console.log('> --- data', undata)
+	d3.select("svg").remove();
+
+	var x = d3.scale.ordinal().rangeBands([0, width]),
+		z = d3.scale.linear().domain([0, 1]).clamp(true),
+		c = d3.scale.category10().domain(d3.range(10));
+
+
+	var color = d3.scale.linear()
+					.domain([0, 0.5, 1])
+					.range(["red", "white", "blue"]);
+		
+	var svg = d3.select("body").append("svg")
+				.attr("width", width + margin.left + margin.right)
+				.attr("height", height + margin.top + margin.bottom)
+				.style("margin-left", -margin.left + "px")
+				.append("g")
+				.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+	var matrix = [],
+	nodes      = undata.nodes,
+	n          = nodes.length;
+
+	// Compute index per node.
+	nodes.forEach(function(node, i) {
+		node.index = i;
+		matrix[i]  = d3.range(n).map(function(j) { return {x: j, y: i, col: 0, pct : 0}; });
+	});
+	console.log('matrix', matrix)
+
+	// Convert links to matrix; count character occurrences.
+	undata.links.forEach(function(link) {
+		matrix[link.source][link.target].col += link.color_value ;
+		matrix[link.source][link.target].pct += link.value ;
+	});
+
+	var orders = {
+		index : d3.range(n).sort(function(a, b) { return d3.ascending(nodes[a].index, nodes[b].index); }),
+		name  : d3.range(n).sort(function(a, b) { return d3.ascending(nodes[a].name, nodes[b].name); }),
+		group : d3.range(n).sort(function(a, b) { return nodes[b].group - nodes[a].group; })
+	};
+
+	x.domain(orders.index);
+
+	svg.append("rect")
+		.attr("class", "background")
+		.attr("width", width)
+		.attr("height", height);
+
+	var row = svg.selectAll(".row")
+				.data(matrix)
+				.enter().append("g")
+				.attr("class", "row")
+				.attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
+				.each(row);
+
+	// row.append("line").attr("x2", width);
+
+	row.append("text")
+		.attr("x", -6)
+		.attr("y", x.rangeBand() / 2)
+		.attr("dy", ".32em")
+		.attr("text-anchor", "end")
+		.text(function(d, i) { return nodes[i].name; });
+
+	var column = svg.selectAll(".column")
+	.data(matrix)
+	.enter().append("g")
+	.attr("class", "column")
+	.attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
+
+	// column.append("line").attr("x1", -width);
+
+	column.append("text")
+			.attr("x", 6)
+			.attr("y", x.rangeBand() / 2)
+			.attr("dy", ".32em")
+			.attr("text-anchor", "start")
+			.text(function(d, i) { return nodes[i].name; })
+			.attr('fill', function(d, i) {return nodes[i].group == 1 ? 'black' : 'grey'})
+
+	function row(row) {
+		var cell = d3.select(this).selectAll(".cell")
+		.data(row.filter(function(d) { return d.pct; }))
+		.enter().append("rect")
+		.attr("class", "cell")
+		.attr("x", function(d) { return x(d.x); })
+		.attr("width", function(d) {return x.rangeBand()})
+		.attr("height", function(d) {return x.rangeBand()})
+		.style("fill", function(d) {return color(d.col)})
+		.on("mouseover", mouseover)
+		.on("mouseout", mouseout);
+	}
+
+	function mouseover(p) {
+		d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
+		d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
+		
+		var p1 = $('.row text')[p.y].innerHTML;
+		var p2 = $('.row text')[p.x].innerHTML;
+		d3.select('#hover').text(p1 + ' agreed with ' + p2 + ' ' + Math.floor(p.pct * 100) + '% of the time');
+	}
+
+	function mouseout() {
+		d3.selectAll("text").classed("active", false);
+		d3.select('#hover').text('')
+	}
+	  
+	  
+	d3.select("#order").on("change", function() {
+		order(this.value);
+	});
+
+	function order(value) {
+		x.domain(orders[value]);
+
+		var t = svg.transition().duration(2500);
+
+		t.selectAll(".row")
+		.delay(function(d, i) { return x(i) * 4; })
+		.attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
+		.selectAll(".cell")
+		.delay(function(d) { return x(d.x) * 4; })
+		.attr("x", function(d) { return x(d.x); });
+
+		t.selectAll(".column")
+		.delay(function(d, i) { return x(i) * 4; })
+		.attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
+	}
+
+	d3.select("#bloc").on("change", function() {
+		refresh_data();
+	});
+}
+
+function refresh_data(value) {
+	var block_name = d3.select('#bloc').property('value');
+	var start_date = '1900-01-01'
+	var end_date   = '2020-01-01'
+	var issue      = 'All'
+
+	var params = {
+		'block_name' : block_name,
+		'start_date' : start_date,
+		'end_date'   : end_date,
+		'issue'      : issue
+	}
+	console.log('submitting params')
+	cooc_from_R(params);
+}
+
+function cooc_from_R(params) {
+	$.ajax({
+		type     : "POST",
+		url      : 'http://localhost:9110/',
+		dataType : 'json',
+		data     : JSON.stringify({"fun" : "make_json_matrix", "params" : params}),
+		success  : function(response) {
+			console.log('data from ajax', response)
+			if(response.data) {
+				make_plot(response.data)
+			} else {
+				alert('No data meets your criteria!')
+			}
+		}
+	});
+}
+
+refresh_data()
+
+</script>
